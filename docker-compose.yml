@@ -1,0 +1,26 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: crm-module-db
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "3306:3306"
+    restart: always
+    networks:
+      - backend
+    volumes:
+      - db-data:/var/lib/mysql
+
+volumes:
+  db-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/db
+
+networks:
+  backend:
+    driver: bridge
