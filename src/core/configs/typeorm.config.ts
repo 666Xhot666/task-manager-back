@@ -2,6 +2,8 @@ import { ConfigService } from '@nestjs/config';
 import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { MysqlConnectionOptions } from 'typeorm/driver/mysql/MysqlConnectionOptions';
 
+import { User } from '../../modules/user/entities/user.entity';
+
 export function getTypeORMConfig(
 	configService: ConfigService,
 ): TypeOrmModuleOptions {
@@ -14,5 +16,8 @@ export function getTypeORMConfig(
 		username: configService.getOrThrow<string>('MYSQL_USER'),
 		password: configService.getOrThrow<string>('MYSQL_PASSWORD'),
 		database: configService.getOrThrow<string>('MYSQL_DATABASE'),
+		entities: [User],
+		synchronize: true,
+		autoLoadEntities: true,
 	};
 }
