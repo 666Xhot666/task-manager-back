@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { UserModule } from '../modules/user/user.module';
+
 import { getTypeORMConfig } from './configs/typeorm.config';
 
 @Module({
@@ -12,6 +14,7 @@ import { getTypeORMConfig } from './configs/typeorm.config';
 			inject: [ConfigService],
 			useFactory: getTypeORMConfig,
 		}),
+		UserModule,
 	],
 })
 export class CoreModule {}
