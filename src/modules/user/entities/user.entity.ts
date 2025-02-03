@@ -1,6 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Exclude } from 'class-transformer';
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+
+import { JwtId } from '../../auth/jwt-id/entities/jwt-id.entity';
 
 export enum UserRole {
 	ADMIN = 'admin',
@@ -32,4 +34,7 @@ export class User {
 		enumName: 'UserRole',
 	})
 	role: UserRole;
+	@OneToMany(() => JwtId, (jwtId) => jwtId.user)
+	@Exclude()
+	jwtIds?: JwtId[];
 }
