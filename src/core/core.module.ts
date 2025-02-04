@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from 'src/modules/auth/auth.module';
 
 import { ProjectModule } from '../modules/project/project.module';
+import { TaskModule } from '../modules/task/task.module';
 import { UserModule } from '../modules/user/user.module';
 
 import { getTypeORMConfig } from './configs/typeorm.config';
@@ -19,6 +20,7 @@ import { getTypeORMConfig } from './configs/typeorm.config';
 		UserModule,
 		AuthModule,
 		ProjectModule,
+		TaskModule,
 	],
 })
 export class CoreModule {}
