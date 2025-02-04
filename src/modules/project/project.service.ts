@@ -9,6 +9,7 @@ import { Repository } from 'typeorm';
 
 import { User, UserRole } from '../user/entities/user.entity';
 
+import { AuditLogProjectService } from './audit-log.project.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { FilterProjectDto } from './dto/filter-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
@@ -21,6 +22,7 @@ export class ProjectService {
 		private readonly projectRepository: Repository<Project>,
 		@InjectRepository(User)
 		private readonly userRepository: Repository<User>,
+		private readonly auditLog: AuditLogProjectService,
 	) {}
 	/**
 	 * Create a new project for the authenticated user.

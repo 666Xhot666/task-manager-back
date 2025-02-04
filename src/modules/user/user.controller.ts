@@ -2,7 +2,6 @@ import {
 	Body,
 	Controller,
 	Delete,
-	ForbiddenException,
 	Get,
 	Param,
 	Patch,
@@ -119,8 +118,7 @@ export class UserController {
 	 * This endpoint allows updating a user's details. Access is restricted by the user's role.
 	 * A `PERFORMER` can only update their own data.
 	 *
-	 * @param {UserRole} role - Role of the current user performing the update.
-	 * @param {string} userId - The ID of the currently authenticated user.
+	 * @param {User} user - authorized user
 	 * @param {string} id - The ID of the user whose data is to be updated.
 	 * @param {UpdateUserDto} updateUserDto - DTO containing the updated user data.
 	 * @returns {User} The updated user entity.
@@ -142,15 +140,11 @@ export class UserController {
 	@ApiResponse({ status: 500, description: 'Internal server error' })
 	@AccessAuthorization()
 	async update(
-		@AuthorizedUser('role') role: User['role'],
-		@AuthorizedUser('id') userId: User['id'],
+		@AuthorizedUser() user: User,
 		@Param('id') id: string,
 		@Body() updateUserDto: UpdateUserDto,
 	): Promise<User> {
-		if (role === UserRole.PERFORMER && userId !== id) {
-			throw new ForbiddenException();
-		}
-		return this.userService.update(id, updateUserDto);
+		return this.userService.update(user, id, updateUserDto);
 	}
 
 	/**
@@ -158,12 +152,14 @@ export class UserController {
 	 *
 	 * This endpoint allows removing a user from the system. Only accessible by users with `ADMIN` or `PERFORMER` roles.
 	 *
+	 * @param {User} user - authorized user.
 	 * @param {string} id - The ID of the user to be deleted.
 	 * @returns {void} No content if the deletion is successful.
 	 * @throws {ForbiddenException} Forbidden if the user does not have the required permissions to delete the user.
 	 * @throws {InternalServerException} Internal server error if an unexpected error occurs.
 	 */
 	@Delete(':id')
+	@Roles(UserRole.ADMIN, UserRole.PERFORMER)
 	@ApiOperation({ summary: 'Remove a user by ID' })
 	@ApiParam({ name: 'id', type: String, description: 'User ID' })
 	@ApiResponse({
@@ -172,8 +168,10 @@ export class UserController {
 	})
 	@ApiResponse({ status: 403, description: 'Forbidden.' })
 	@ApiResponse({ status: 500, description: 'Internal server error' })
-	@Roles(UserRole.ADMIN, UserRole.PERFORMER)
-	async remove(@Param('id') id: string): Promise<void> {
-		return this.userService.remove(id);
+	async remove(
+		@AuthorizedUser() user: User,
+		@Param('id') id: string,
+	): Promise<void> {
+		return this.userService.remove(user, id);
 	}
 }

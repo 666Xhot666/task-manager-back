@@ -1,9 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Exclude } from 'class-transformer';
 import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 
 import { Project } from '../../project/entities/project.entity';
 import { User } from '../../user/entities/user.entity';
-import { Exclude } from 'class-transformer';
 
 export enum TaskStatus {
 	TO_DO = 'To Do',
