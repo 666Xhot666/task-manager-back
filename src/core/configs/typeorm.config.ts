@@ -3,6 +3,7 @@ import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { MysqlConnectionOptions } from 'typeorm/driver/mysql/MysqlConnectionOptions';
 
 import { JwtId } from '../../modules/auth/jwt-id/entities/jwt-id.entity';
+import { Project } from '../../modules/project/entities/project.entity';
 import { User } from '../../modules/user/entities/user.entity';
 
 export function getTypeORMConfig(
@@ -17,7 +18,7 @@ export function getTypeORMConfig(
 		username: configService.getOrThrow<string>('MYSQL_USER'),
 		password: configService.getOrThrow<string>('MYSQL_PASSWORD'),
 		database: configService.getOrThrow<string>('MYSQL_DATABASE'),
-		entities: [User, JwtId],
+		entities: [User, JwtId, Project],
 		synchronize: true,
 		autoLoadEntities: true,
 	};

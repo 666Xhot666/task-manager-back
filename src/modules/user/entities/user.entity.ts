@@ -3,6 +3,7 @@ import { Exclude } from 'class-transformer';
 import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
 
 import { JwtId } from '../../auth/jwt-id/entities/jwt-id.entity';
+import { Project } from '../../project/entities/project.entity';
 
 export enum UserRole {
 	ADMIN = 'admin',
@@ -37,4 +38,8 @@ export class User {
 	@OneToMany(() => JwtId, (jwtId) => jwtId.user)
 	@Exclude()
 	jwtIds?: JwtId[];
+
+	@OneToMany(() => Project, (project) => project.teamHead)
+	@Exclude()
+	projects?: Project[];
 }
