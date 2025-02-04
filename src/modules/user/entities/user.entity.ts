@@ -4,6 +4,7 @@ import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
 
 import { JwtId } from '../../auth/jwt-id/entities/jwt-id.entity';
 import { Project } from '../../project/entities/project.entity';
+import { Task } from '../../task/entities/task.entity';
 
 export enum UserRole {
 	ADMIN = 'admin',
@@ -42,4 +43,8 @@ export class User {
 	@OneToMany(() => Project, (project) => project.teamHead)
 	@Exclude()
 	projects?: Project[];
+
+	@OneToMany(() => Task, (task) => task.assignee)
+	@Exclude()
+	tasks?: Task[];
 }

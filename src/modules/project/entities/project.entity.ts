@@ -1,6 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import {
+	Column,
+	Entity,
+	ManyToOne,
+	OneToMany,
+	PrimaryGeneratedColumn,
+} from 'typeorm';
 
+import { Task } from '../../task/entities/task.entity';
 import { User } from '../../user/entities/user.entity';
 
 export enum ProjectStatus {
@@ -50,11 +57,14 @@ export class Project {
 	})
 	teamHead: User;
 
-	// @OneToMany(() => Task, (task) => task.project)
-	// @ApiProperty({
-	//   description: 'List of tasks associated with this project.',
-	//   type: () => [Task],
-	//   nullable: true,
-	// })
-	// task?: Task[];
+	@Column()
+	teamHeadId: string;
+
+	@OneToMany(() => Task, (task) => task.project)
+	@ApiProperty({
+		description: 'List of tasks associated with this project.',
+		type: () => [Task],
+		nullable: true,
+	})
+	tasks?: Task[];
 }
