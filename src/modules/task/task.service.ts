@@ -9,6 +9,7 @@ import { Repository, SelectQueryBuilder } from 'typeorm';
 import { Project } from '../project/entities/project.entity';
 import { User, UserRole } from '../user/entities/user.entity';
 
+import { AuditLogTaskService } from './audit-log.task.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { TaskFilterDto } from './dto/filter-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
@@ -23,6 +24,7 @@ export class TaskService {
 		private readonly userRepository: Repository<User>,
 		@InjectRepository(Project)
 		private readonly projectRepository: Repository<Project>,
+		private readonly auditLogTaskService: AuditLogTaskService,
 	) {}
 	/**
 	 * Creates a new task after validating user access and assignee existence.
@@ -40,6 +42,7 @@ export class TaskService {
 		await this.ensureAssigneeExists(createTaskDto.assigneeId);
 
 		const task = this.taskRepository.create(createTaskDto);
+		await this.auditLogTaskService.logCreate(user, task);
 		return this.taskRepository.save(task);
 	}
 	/**
@@ -87,8 +90,9 @@ export class TaskService {
 		if (!task) throw new NotFoundException();
 
 		this.updateTaskProperties(user, task, updateTaskDto);
-
-		return this.taskRepository.save(task);
+		const updatedTask = await this.taskRepository.save(task);
+		await this.auditLogTaskService.logUpdate(user, task, updatedTask);
+		return updatedTask;
 	}
 	/**
 	 * Deletes a specific task by its ID.
@@ -107,8 +111,9 @@ export class TaskService {
 
 		const task = await query.getOne();
 		if (!task) throw new NotFoundException();
-
-		return this.taskRepository.remove(task);
+		const removedTask = await this.taskRepository.remove(task);
+		await this.auditLogTaskService.logDelete(user, task);
+		return removedTask;
 	}
 	/**
 	 * Checks if the user has access based on their role.

@@ -2,6 +2,7 @@ import {
 	BadRequestException,
 	ConflictException,
 	ConsoleLogger,
+	ForbiddenException,
 	Injectable,
 	InternalServerErrorException,
 	NotFoundException,
@@ -12,9 +13,10 @@ import { Repository } from 'typeorm';
 
 import { encrypt } from '../../shared/utils/encrypt/encrypt.util';
 
+import { AuditLogUserService } from './audit-log.user.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { User } from './entities/user.entity';
+import { User, UserRole } from './entities/user.entity';
 
 @Injectable()
 export class UserService {
@@ -23,6 +25,7 @@ export class UserService {
 	constructor(
 		@InjectRepository(User)
 		private readonly userRepository: Repository<User>,
+		private readonly auditLogUserService: AuditLogUserService,
 	) {}
 	/**
 	 * Creates a new user in the database.
@@ -58,6 +61,7 @@ export class UserService {
 				password: hashedPassword,
 			});
 			const savedUser = await this.userRepository.save(user);
+			await this.auditLogUserService.logCreate(savedUser, savedUser);
 			this.logger.log(
 				`User with email ${createUserDto.email} created successfully.`,
 			);
@@ -110,24 +114,39 @@ export class UserService {
 	 *
 	 * This method first checks if the user exists. If they do, it merges the
 	 * provided `updateUserDto` into the existing user and saves the updated user.
-	 *
+	 * @param {User} authorizedUser - authorized user.
 	 * @param {User['id']} id - The ID of the user to update.
 	 * @param {UpdateUserDto} updateUserDto - The DTO object containing the updated user data.
 	 * @returns {Promise<User>} The updated user entity.
 	 * @throws {InternalServerErrorException} If an error occurs while updating the user.
 	 */
-	async update(id: User['id'], updateUserDto: UpdateUserDto): Promise<User> {
+	async update(
+		authorizedUser: User,
+		id: User['id'],
+		updateUserDto: UpdateUserDto,
+	): Promise<User> {
+		if (
+			authorizedUser.role === UserRole.PERFORMER &&
+			authorizedUser.id !== id
+		) {
+			throw new ForbiddenException();
+		}
 		const user = await this.findOne(id);
-
+		const oldUser = structuredClone(user);
 		Object.assign(user, updateUserDto);
 
 		try {
-			await this.userRepository.save(user);
+			const updatedUser = await this.userRepository.save(user);
 			this.logger.log(`User with id ${id} updated successfully.`);
-			return plainToClass(User, user);
+			await this.auditLogUserService.logUpdate(
+				authorizedUser,
+				oldUser,
+				updatedUser,
+			);
+			return plainToClass(User, updatedUser);
 		} catch (error) {
 			this.logger.error(
-				'Error creating user',
+				'Error updating user',
 				error instanceof Error ? error.stack : error,
 			);
 			throw new InternalServerErrorException('Error updating user');
@@ -139,15 +158,16 @@ export class UserService {
 	 * This method first checks if the user exists, and if they do, deletes the
 	 * user from the database.
 	 *
+	 * @param {User} user - authorized user
 	 * @param {User['id']} id - The ID of the user to remove.
 	 * @returns {Promise<void>} Void.
 	 * @throws {InternalServerErrorException} If an error occurs while removing the user.
 	 */
-	async remove(id: User['id']): Promise<void> {
-		const user = await this.findOne(id);
-
+	async remove(user: User, id: User['id']): Promise<void> {
+		const targetUser = await this.findOne(id);
 		try {
-			await this.userRepository.remove(user);
+			await this.userRepository.remove(targetUser);
+			await this.auditLogUserService.logDelete(user, targetUser);
 			this.logger.log(`User with id ${id} removed successfully.`);
 		} catch (error) {
 			this.logger.error(
