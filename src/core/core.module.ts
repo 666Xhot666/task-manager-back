@@ -16,6 +16,7 @@ import { UserModule } from '../modules/user/user.module';
 import { getCacheConfig } from './configs/cache.config';
 import { getQueueConfig } from './configs/queue.config';
 import { getTypeORMConfig } from './configs/typeorm.config';
+import { MonitoringModule } from './monitoring/monitoring.module';
 import { CacheService } from './services/cache.service';
 
 @Module({
@@ -45,6 +46,7 @@ import { CacheService } from './services/cache.service';
 		CronModule,
 		MailModule,
 		ProjectAnalyticsModule,
+		MonitoringModule,
 	],
 	providers: [CacheService],
 })

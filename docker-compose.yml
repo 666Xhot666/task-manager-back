@@ -36,6 +36,26 @@ services:
       - redisinsight_data:/usr/src
     networks:
       - backend
+  prometheus:
+    image: prom/prometheus
+    container_name: task-manager-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    restart: always
+    networks:
+      - backend
+  grafana:
+    image: grafana/grafana
+    container_name: task-manager-grafana
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    restart: always
+    networks:
+      - backend
 volumes:
   db-data:
     driver: local
@@ -54,6 +74,12 @@ volumes:
     driver_opts:
       type: none
       device: ./data/redisinsight
+      o: bind
+  grafana_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ./data/grafana
       o: bind
 networks:
   backend:

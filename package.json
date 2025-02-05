@@ -33,6 +33,7 @@
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/schedule": "^5.0.1",
     "@nestjs/swagger": "^11.0.3",
+    "@nestjs/terminus": "^11.0.0",
     "@nestjs/typeorm": "^11.0.0",
     "@react-email/components": "0.0.32",
     "argon2": "^0.41.1",
@@ -45,11 +46,14 @@
     "keyv": "^5.2.3",
     "mysql2": "^3.12.0",
     "passport-jwt": "^4.0.1",
+    "prom-client": "^15.1.3",
     "react": "^19.0.0",
     "redis": "^4.7.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "typeorm": "^0.3.20"
+    "typeorm": "^0.3.20",
+    "winston": "^3.17.0",
+    "winston-daily-rotate-file": "^5.0.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
