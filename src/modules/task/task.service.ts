@@ -13,7 +13,7 @@ import { AuditLogTaskService } from './audit-log.task.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { TaskFilterDto } from './dto/filter-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
-import { Task } from './entities/task.entity';
+import { Task, TaskStatus } from './entities/task.entity';
 
 @Injectable()
 export class TaskService {
@@ -293,6 +293,12 @@ export class TaskService {
 			Object.assign(task, updateTaskDto);
 		} else {
 			Object.assign(task, { status: updateTaskDto.status });
+		}
+		if (
+			updateTaskDto.status === TaskStatus.DONE &&
+			task.status !== TaskStatus.DONE
+		) {
+			task.completedAt = new Date();
 		}
 	}
 }

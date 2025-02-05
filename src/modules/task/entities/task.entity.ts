@@ -56,6 +56,17 @@ export class Task {
 	@Column()
 	deadline: Date;
 
+	@ApiProperty({
+		description: 'Date when task was marked as Done',
+		type: String,
+		format: 'date-time',
+		example: '2025-01-01T00:00:00.000Z',
+	})
+	@Column({
+		nullable: true,
+	})
+	completedAt: Date;
+
 	@Exclude()
 	@ManyToOne(() => Project, (project) => project.tasks)
 	project: Project;
