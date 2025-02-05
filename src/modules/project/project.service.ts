@@ -8,7 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
 
-import { Task } from '../task/entities/task.entity';
+import { CacheService } from '../../core/services/cache.service';
 import { User, UserRole } from '../user/entities/user.entity';
 
 import { AuditLogProjectService } from './audit-log.project.service';
@@ -20,6 +20,8 @@ import { Project, ProjectStatus } from './entities/project.entity';
 @Injectable()
 export class ProjectService {
 	private readonly logger = new Logger(ProjectService.name);
+	private readonly CACHE_TTL = 60;
+	private readonly CACHE_PREFIX = 'project';
 
 	constructor(
 		@InjectRepository(Project)
@@ -27,6 +29,7 @@ export class ProjectService {
 		@InjectRepository(User)
 		private readonly userRepository: Repository<User>,
 		private readonly auditLog: AuditLogProjectService,
+		private readonly cacheService: CacheService,
 	) {}
 
 	/**
@@ -46,6 +49,7 @@ export class ProjectService {
 			...createProjectDto,
 			teamId: user.id,
 		});
+		await this.auditLog.logCreate(user, project);
 		this.logger.log(
 			`Project ${project.id} created successfully for user ${user.id}. ${JSON.stringify(project, null, 2)}`,
 		);
@@ -54,6 +58,7 @@ export class ProjectService {
 
 	/**
 	 * Create a new project as an admin.
+	 * @param user - The currently authenticated user.
 	 * @param createProjectDto - The DTO containing project creation details.
 	 * @returns The created project.
 	 * @throws BadRequestException if the teamId is missing.
@@ -61,6 +66,7 @@ export class ProjectService {
 	 * @throws BadRequestException if the teamHead has invalid role.
 	 */
 	async createProjectByAdmin(
+		user: User,
 		createProjectDto: CreateProjectDto,
 	): Promise<Project> {
 		this.logger.log('Admin is attempting to create a project.');
@@ -86,6 +92,7 @@ export class ProjectService {
 			);
 		}
 		const project = await this.createProject(createProjectDto);
+		await this.auditLog.logCreate(user, project);
 		this.logger.log(
 			`Project ${project.id} created successfully by admin. ${JSON.stringify(project, null, 2)}`,
 		);
@@ -103,18 +110,29 @@ export class ProjectService {
 		filterProjectDTO: FilterProjectDto,
 	): Promise<Project[]> {
 		this.logger.log(`User ${user.id} is retrieving projects.`);
-		const query = this.projectRepository.createQueryBuilder('project');
-		this.applyRoleBasedAccess(query, user);
-		this.applyFilters(query, user, filterProjectDTO);
-		this.applySorting(query, filterProjectDTO);
-		this.logger.debug(
-			`Query for find all with filter: ${JSON.stringify(filterProjectDTO, null, 2)}, query: ${query.getQuery()}`,
+		const cacheKey = this.cacheService.generateKey(
+			this.CACHE_PREFIX,
+			user.id.toString(),
+			JSON.stringify(filterProjectDTO),
 		);
-		const projects = await query.getMany();
-		this.logger.log(
-			`Retrieved ${projects.length} projects for user ${user.id}.`,
+		return this.cacheService.getOrSet(
+			cacheKey,
+			async () => {
+				const query = this.projectRepository.createQueryBuilder('project');
+				this.applyRoleBasedAccess(query, user);
+				this.applyFilters(query, user, filterProjectDTO);
+				this.applySorting(query, filterProjectDTO);
+				this.logger.debug(
+					`Query for find all with filter: ${JSON.stringify(filterProjectDTO, null, 2)}, query: ${query.getQuery()}`,
+				);
+				const projects = await query.getMany();
+				this.logger.log(
+					`Retrieved ${projects.length} projects for user ${user.id}.`,
+				);
+				return projects;
+			},
+			this.CACHE_TTL,
 		);
-		return projects;
 	}
 
 	/**
@@ -124,21 +142,38 @@ export class ProjectService {
 	 * @returns The project if found.
 	 * @throws NotFoundException if the project is not found or the user has no access.
 	 */
-	async findOne(user: User, id: number): Promise<Project> {
+	async findOne(user: User, id: string): Promise<Project> {
 		this.logger.log(`User ${user.id} is retrieving project with ID ${id}.`);
-		const query = this.projectRepository.createQueryBuilder('project');
-		this.applyRoleBasedAccess(query, user);
-		const project = await query.andWhere('project.id = :id', { id }).getOne();
-		if (!project) {
-			this.logger.error(
-				`Project with ID ${id} not found or access denied for user ${user.id}.`,
-			);
-			throw new NotFoundException(
-				'Project not found or insufficient permissions',
-			);
-		}
-		this.logger.log(`Project ${id} found for user ${user.id}.`);
-		return project;
+
+		const cacheKey = this.cacheService.generateKey(
+			this.CACHE_PREFIX,
+			id.toString(),
+			user.id.toString(),
+		);
+
+		return this.cacheService.getOrSet(
+			cacheKey,
+			async () => {
+				const query = this.projectRepository.createQueryBuilder('project');
+				this.applyRoleBasedAccess(query, user);
+				const project = await query
+					.andWhere('project.id = :id', { id })
+					.getOne();
+
+				if (!project) {
+					this.logger.error(
+						`Project with ID ${id} not found or access denied for user ${user.id}.`,
+					);
+					throw new NotFoundException(
+						'Project not found or insufficient permissions',
+					);
+				}
+
+				this.logger.log(`Project ${id} found for user ${user.id}.`);
+				return project;
+			},
+			this.CACHE_TTL,
+		);
 	}
 
 	/**
@@ -151,13 +186,16 @@ export class ProjectService {
 	 */
 	async update(
 		user: User,
-		id: number,
+		id: string,
 		updateProjectDto: UpdateProjectDto,
 	): Promise<Project> {
 		this.logger.log(`User ${user.id} is updating project with ID ${id}.`);
 		const project = await this.findOne(user, id);
+		const oldProject = structuredClone(project);
 		this.assignUpdatesToProject(project, updateProjectDto);
 		const updatedProject = await this.projectRepository.save(project);
+		await this.auditLog.logUpdate(user, project, oldProject);
+		await this.invalidateCacheKey(id, user);
 		this.logger.log(`Project ${id} updated successfully by user ${user.id}.`);
 		return updatedProject;
 	}
@@ -169,11 +207,22 @@ export class ProjectService {
 	 * @returns void
 	 * @throws NotFoundException if the project is not found.
 	 */
-	async remove(user: User, id: number): Promise<void> {
+	async remove(user: User, id: string): Promise<void> {
 		this.logger.log(`User ${user.id} is deleting project with ID ${id}.`);
 		const project = await this.findOne(user, id);
 		await this.projectRepository.remove(project);
+		await this.invalidateCacheKey(id, user);
+		await this.auditLog.logDelete(user, project);
 		this.logger.log(`Project ${id} deleted successfully by user ${user.id}.`);
+	}
+
+	private async invalidateCacheKey(id: string, user: User) {
+		const cacheKey = this.cacheService.generateKey(
+			this.CACHE_PREFIX,
+			id.toString(),
+			user.id.toString(),
+		);
+		await this.cacheService.delete(cacheKey);
 	}
 
 	private validateTeamId(user: User, createProjectDto: CreateProjectDto): void {

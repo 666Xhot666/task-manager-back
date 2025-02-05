@@ -7,10 +7,11 @@ import { User } from '../user/entities/user.entity';
 
 import { ProjectAnalyticsController } from './project-analytics.controller';
 import { ProjectAnalyticsService } from './project-analytics.service';
+import { CacheService } from '../../core/services/cache.service';
 
 @Module({
 	imports: [TypeOrmModule.forFeature([User, Project, Task])],
 	controllers: [ProjectAnalyticsController],
-	providers: [ProjectAnalyticsService],
+	providers: [ProjectAnalyticsService, CacheService],
 })
 export class ProjectAnalyticsModule {}
