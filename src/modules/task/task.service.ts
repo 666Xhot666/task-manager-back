@@ -9,6 +9,8 @@ import { Repository, SelectQueryBuilder } from 'typeorm';
 
 import { CacheService } from '../../core/services/cache.service';
 import { Project } from '../project/entities/project.entity';
+import { EmailQueueProducer } from '../queues/email/email-queue.producer';
+import { EmailJobPriority } from '../queues/email/email-queue.types';
 import { User, UserRole } from '../user/entities/user.entity';
 
 import { AuditLogTaskService } from './audit-log.task.service';
@@ -32,6 +34,7 @@ export class TaskService {
 		private readonly projectRepository: Repository<Project>,
 		private readonly auditLogTaskService: AuditLogTaskService,
 		private readonly cacheService: CacheService,
+		private readonly emailQueueProducer: EmailQueueProducer,
 	) {}
 	/**
 	 * Creates a new task after validating user access and assignee existence.
@@ -55,6 +58,19 @@ export class TaskService {
 
 		await this.auditLogTaskService.logCreate(user, task);
 		const savedTask = await this.taskRepository.save(task);
+		await this.emailQueueProducer.addTaskAssignedEmail(
+			{
+				taskId: task.id.toString(),
+				to: task.assignee.id,
+				data: {
+					taskName: task.title,
+					taskLink: `${task.id}`,
+					projectName: `${task.project.title}`,
+					assignedBy: user.email,
+				},
+			},
+			EmailJobPriority.HIGH,
+		);
 		this.logger.log(`Task created successfully with ID ${savedTask.id}`);
 		return savedTask;
 	}
@@ -146,7 +162,7 @@ export class TaskService {
 			throw new NotFoundException(`Task with ID ${id} not found.`);
 		}
 
-		this.updateTaskProperties(user, task, updateTaskDto);
+		await this.updateTaskProperties(user, task, updateTaskDto);
 		const updatedTask = await this.taskRepository.save(task);
 		await this.auditLogTaskService.logUpdate(user, task, updatedTask);
 		await this.invalidateCacheKey(id, user);
@@ -364,21 +380,35 @@ export class TaskService {
 	 * @param task - The task to update.
 	 * @param updateTaskDto - The data to update the task with.
 	 */
-	private updateTaskProperties(
+	private async updateTaskProperties(
 		user: User,
 		task: Task,
 		updateTaskDto: UpdateTaskDto,
 	) {
-		if ([UserRole.ADMIN, UserRole.MANAGER].includes(user.role)) {
-			Object.assign(task, updateTaskDto);
-		} else {
-			Object.assign(task, { status: updateTaskDto.status });
-		}
 		if (
 			updateTaskDto.status === TaskStatus.DONE &&
 			task.status !== TaskStatus.DONE
 		) {
 			task.completedAt = new Date();
+			await this.emailQueueProducer.addTaskCompleteEmail(
+				{
+					to: task.project.teamHead.email,
+					taskId: task.id.toString(),
+					data: {
+						taskName: task.title,
+						managerName: task.project.teamHead.email,
+						performerName: task.assignee.email,
+						projectName: task.project.title,
+						taskUrl: `/${task.id}`,
+					},
+				},
+				EmailJobPriority.HIGH,
+			);
+		}
+		if ([UserRole.ADMIN, UserRole.MANAGER].includes(user.role)) {
+			Object.assign(task, updateTaskDto);
+		} else {
+			Object.assign(task, { status: updateTaskDto.status });
 		}
 	}
 }

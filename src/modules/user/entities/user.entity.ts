@@ -34,6 +34,10 @@ export class User {
 	@Exclude()
 	password: string;
 
+	@Column({ default: 'London', type: String })
+	@ApiProperty({ description: 'Unique email of the user', type: String })
+	city: string;
+
 	@Column({
 		type: 'enum',
 		enum: UserRole,
