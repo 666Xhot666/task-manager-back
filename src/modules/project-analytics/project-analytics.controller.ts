@@ -1,4 +1,4 @@
-import { Controller, Get, Header, Param, Res } from '@nestjs/common';
+import { Controller, Get, Header, Param } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 import { AuthorizedUser } from '../../shared/decorators/authorized/user.authorized.decorator';
@@ -38,7 +38,7 @@ export class ProjectAnalyticsController {
 	@Get('task-status-stats')
 	getTaskStatusStats(
 		@AuthorizedUser() user: User,
-		@Param('projectId') projectId: number,
+		@Param('projectId') projectId: string,
 	) {
 		return this.projectAnalyticsService.getTaskStatusStats(user, projectId);
 	}
@@ -66,7 +66,7 @@ export class ProjectAnalyticsController {
 	@Get('average-completion-time')
 	getAverageCompletionTime(
 		@AuthorizedUser() user: User,
-		@Param('projectId') projectId: number,
+		@Param('projectId') projectId: string,
 	) {
 		return this.projectAnalyticsService.getAverageCompletionTime(
 			user,
@@ -94,7 +94,7 @@ export class ProjectAnalyticsController {
 	@Get('top-active-users')
 	getTopActiveUsers(
 		@AuthorizedUser() user: User,
-		@Param('projectId') projectId: number,
+		@Param('projectId') projectId: string,
 	) {
 		return this.projectAnalyticsService.getTopActiveUsers(user, projectId);
 	}
@@ -123,7 +123,7 @@ export class ProjectAnalyticsController {
 	@Get('csv')
 	async exportcsv(
 		@AuthorizedUser() user: User,
-		@Param('projectId') projectId: number,
+		@Param('projectId') projectId: string,
 	) {
 		return this.projectAnalyticsService.getCSV(user, projectId);
 	}

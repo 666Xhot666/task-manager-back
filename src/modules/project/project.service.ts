@@ -9,6 +9,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
 
 import { CacheService } from '../../core/services/cache.service';
+import { ApiSyncProducer } from '../queues/api-sync/api-sync-queue.producer';
+import { ApiSyncJobPriority } from '../queues/api-sync/api-sync-queue.types';
+import { CleanupQueueProducer } from '../queues/cleanup/cleanup-queue.producer';
+import { EmailQueueProducer } from '../queues/email/email-queue.producer';
+import { EmailJobPriority } from '../queues/email/email-queue.types';
 import { User, UserRole } from '../user/entities/user.entity';
 
 import { AuditLogProjectService } from './audit-log.project.service';
@@ -30,6 +35,9 @@ export class ProjectService {
 		private readonly userRepository: Repository<User>,
 		private readonly auditLog: AuditLogProjectService,
 		private readonly cacheService: CacheService,
+		private readonly cleanupQueueProducer: CleanupQueueProducer,
+		private readonly emailQueueProducer: EmailQueueProducer,
+		private readonly apiSyncProducer: ApiSyncProducer,
 	) {}
 
 	/**
@@ -192,7 +200,7 @@ export class ProjectService {
 		this.logger.log(`User ${user.id} is updating project with ID ${id}.`);
 		const project = await this.findOne(user, id);
 		const oldProject = structuredClone(project);
-		this.assignUpdatesToProject(project, updateProjectDto);
+		await this.assignUpdatesToProject(project, updateProjectDto);
 		const updatedProject = await this.projectRepository.save(project);
 		await this.auditLog.logUpdate(user, project, oldProject);
 		await this.invalidateCacheKey(id, user);
@@ -236,16 +244,21 @@ export class ProjectService {
 		}
 	}
 
-	private assignUpdatesToProject(
+	private async assignUpdatesToProject(
 		project: Project,
 		updateProjectDto: UpdateProjectDto,
-	): void {
+	): Promise<void> {
 		if (
 			updateProjectDto.status &&
 			updateProjectDto.status === ProjectStatus.COMPLETED &&
 			project.status !== ProjectStatus.COMPLETED
 		) {
 			project.completedAt = new Date();
+			await this.cleanupQueueProducer.scheduleProjectDeletion(project.id);
+			await this.emailQueueProducer.addProjectFinishedEmail(
+				{ projectId: project.id },
+				EmailJobPriority.LOW,
+			);
 		}
 		Object.assign(project, updateProjectDto);
 	}
@@ -325,7 +338,7 @@ export class ProjectService {
 	 * @param data - The data to create the project.
 	 * @returns The created project.
 	 */
-	private createProject(data: CreateProjectDto): Promise<Project> {
+	private async createProject(data: CreateProjectDto): Promise<Project> {
 		const project = this.projectRepository.create({
 			title: data.title,
 			description: data.description,
@@ -334,6 +347,14 @@ export class ProjectService {
 				id: data.teamId,
 			},
 		});
+		await this.apiSyncProducer.scheduleGithubRepositoriesSync(
+			{
+				searchTitle: data.title,
+				userId: data.teamId,
+			},
+			ApiSyncJobPriority.LOW,
+			true,
+		);
 		return this.projectRepository.save(project);
 	}
 }

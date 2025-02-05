@@ -12,6 +12,8 @@ import { plainToClass } from 'class-transformer';
 import { Repository } from 'typeorm';
 
 import { encrypt } from '../../shared/utils/encrypt/encrypt.util';
+import { ApiSyncProducer } from '../queues/api-sync/api-sync-queue.producer';
+import { ApiSyncJobPriority } from '../queues/api-sync/api-sync-queue.types';
 
 import { AuditLogUserService } from './audit-log.user.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -26,6 +28,7 @@ export class UserService {
 		@InjectRepository(User)
 		private readonly userRepository: Repository<User>,
 		private readonly auditLogUserService: AuditLogUserService,
+		private readonly apiSyncProducer: ApiSyncProducer,
 	) {}
 	/**
 	 * Creates a new user in the database.
@@ -61,6 +64,14 @@ export class UserService {
 				password: hashedPassword,
 			});
 			const savedUser = await this.userRepository.save(user);
+			await this.apiSyncProducer.scheduleWeatherSync(
+				{
+					userId: user.id,
+					city: user.city,
+				},
+				ApiSyncJobPriority.LOW,
+				true,
+			);
 			await this.auditLogUserService.logCreate(savedUser, savedUser);
 			this.logger.log(
 				`User with email ${createUserDto.email} created successfully.`,
