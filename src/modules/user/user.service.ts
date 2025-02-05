@@ -1,10 +1,10 @@
 import {
 	BadRequestException,
 	ConflictException,
-	ConsoleLogger,
 	ForbiddenException,
 	Injectable,
 	InternalServerErrorException,
+	Logger,
 	NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -20,7 +20,7 @@ import { User, UserRole } from './entities/user.entity';
 
 @Injectable()
 export class UserService {
-	private readonly logger = new ConsoleLogger(UserService.name);
+	private readonly logger = new Logger(UserService.name);
 
 	constructor(
 		@InjectRepository(User)

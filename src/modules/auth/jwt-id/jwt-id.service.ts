@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MoreThan, Repository } from 'typeorm';
 
@@ -12,10 +12,13 @@ import { JwtId } from './entities/jwt-id.entity';
 
 @Injectable()
 export class JwtIdService {
+	private readonly logger = new Logger(JwtIdService.name);
+
 	constructor(
 		@InjectRepository(JwtId)
 		private readonly jwtIdRepository: Repository<JwtId>,
 	) {}
+
 	/**
 	 * Create a new JWT ID and associate it with a user.
 	 *
@@ -34,9 +37,14 @@ export class JwtIdService {
 				id: userId,
 			},
 		});
+
 		await this.jwtIdRepository.save(jwtId);
+		this.logger.log(
+			`Created JWT ID for user ${userId} with expiry at ${expiresAt.toISOString()}`,
+		);
 		return jwtId.id;
 	}
+
 	/**
 	 * Verify the provided JWT ID for the user and check if it's valid and not expired.
 	 *
@@ -56,11 +64,16 @@ export class JwtIdService {
 			},
 			relations: ['user'],
 		});
+
 		if (!jwtidEntity) {
+			this.logger.warn(`Invalid or expired JWT ID provided for user ${userId}`);
 			throw new UnauthorizedException('Invalid token');
 		}
+
+		this.logger.log(`Verified JWT ID for user ${userId}`);
 		return jwtidEntity.user;
 	}
+
 	/**
 	 * Delete a JWT ID.
 	 *
@@ -69,6 +82,7 @@ export class JwtIdService {
 	 */
 	async delete(id: string) {
 		await this.jwtIdRepository.delete(id);
+		this.logger.log(`Deleted JWT ID with ID ${id}`);
 		return true;
 	}
 }

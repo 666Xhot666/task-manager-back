@@ -1,11 +1,11 @@
-import { ConsoleLogger, Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
 import { WeatherApiService } from '../../libs/weather-api/weather-api.service';
 
 @Injectable()
 export class WeatherTask {
-	private readonly logger = new ConsoleLogger(WeatherTask.name);
+	private readonly logger = new Logger(WeatherTask.name);
 
 	constructor(private readonly weatherService: WeatherApiService) {}
 

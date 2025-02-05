@@ -1,11 +1,11 @@
-import { ConsoleLogger, Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
 import { GithubApiService } from '../../libs/github-api/github-api.service';
 
 @Injectable()
 export class GithubTask {
-	private readonly logger = new ConsoleLogger(GithubTask.name);
+	private readonly logger = new Logger(GithubTask.name);
 
 	constructor(private readonly githubService: GithubApiService) {}
 

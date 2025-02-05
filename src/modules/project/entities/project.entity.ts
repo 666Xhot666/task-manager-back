@@ -1,10 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
 	Column,
+	CreateDateColumn,
+	DeleteDateColumn,
 	Entity,
 	ManyToOne,
 	OneToMany,
 	PrimaryGeneratedColumn,
+	UpdateDateColumn,
 } from 'typeorm';
 
 import { Task } from '../../task/entities/task.entity';
@@ -67,4 +70,35 @@ export class Project {
 		nullable: true,
 	})
 	tasks?: Task[];
+	@ApiProperty({
+		description: 'Date when project was marked as Completed',
+		type: String,
+		format: 'date-time',
+		example: '2025-01-01T00:00:00.000Z',
+	})
+	@Column({
+		nullable: true,
+	})
+	completedAt: Date;
+	@ApiProperty({
+		description: 'Creation timestamp',
+		example: '2025-02-05T10:12:30Z',
+	})
+	@CreateDateColumn({ type: 'timestamp' })
+	createdAt: Date;
+
+	@ApiProperty({
+		description: 'Last update timestamp',
+		example: '2025-02-05T10:12:30Z',
+	})
+	@UpdateDateColumn({ type: 'timestamp' })
+	updatedAt: Date;
+
+	@ApiProperty({
+		description: 'Deletion timestamp',
+		example: '2025-02-05T10:12:30Z',
+		nullable: true,
+	})
+	@DeleteDateColumn({ type: 'timestamp', nullable: true })
+	deletedAt?: Date;
 }
