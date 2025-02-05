@@ -1,7 +1,7 @@
 services:
   db:
     image: mysql:8.0
-    container_name: crm-module-db
+    container_name: task-manager-db
     environment:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
@@ -12,7 +12,30 @@ services:
       - backend
     volumes:
       - db-data:/var/lib/mysql
+  redis:
+    image: redis:7.0-alpine
+    container_name: task-manager-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - backend
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
 
+  redisinsight:
+    image: redis/redisinsight:latest
+    container_name: task-manager-redisinsight
+    restart: always
+    environment:
+      - REDISINSIGHT_PASSWORD=${REDIS_PASSWORD}
+    ports:
+      - "5540:5540"
+    volumes:
+      - redisinsight_data:/usr/src
+    networks:
+      - backend
 volumes:
   db-data:
     driver: local
@@ -20,7 +43,18 @@ volumes:
       type: none
       o: bind
       device: ./data/db
-
+  redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ./data/redis
+      o: bind
+  redisinsight_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ./data/redisinsight
+      o: bind
 networks:
   backend:
     driver: bridge

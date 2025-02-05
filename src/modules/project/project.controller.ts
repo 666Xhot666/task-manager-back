@@ -3,7 +3,6 @@ import {
 	Controller,
 	Delete,
 	Get,
-	HttpCode,
 	HttpStatus,
 	Param,
 	Post,
@@ -84,7 +83,7 @@ export class ProjectController {
 		@Body() createProjectDto: CreateProjectDto,
 	) {
 		if (user.role === UserRole.ADMIN) {
-			return this.projectService.createProjectByAdmin(createProjectDto);
+			return this.projectService.createProjectByAdmin(user, createProjectDto);
 		}
 		return this.projectService.create(user, createProjectDto);
 	}
@@ -137,7 +136,7 @@ export class ProjectController {
 		description:
 			'[UserRole.PERFORMER] Forbidden: You are not allowed to see the project.',
 	})
-	findOne(@AuthorizedUser() user: User, @Param('id') id: number) {
+	findOne(@AuthorizedUser() user: User, @Param('id') id: string) {
 		return this.projectService.findOne(user, id);
 	}
 
@@ -168,7 +167,7 @@ export class ProjectController {
 	})
 	update(
 		@AuthorizedUser() user: User,
-		@Param('id') id: number,
+		@Param('id') id: string,
 		@Body() updateProjectDto: UpdateProjectDto,
 	) {
 		return this.projectService.update(user, id, updateProjectDto);
@@ -196,7 +195,7 @@ export class ProjectController {
 		description:
 			'[UserRole.PERFORMER] Forbidden: You are not allowed to delete the project.',
 	})
-	remove(@AuthorizedUser() user: User, @Param('id') id: number) {
+	remove(@AuthorizedUser() user: User, @Param('id') id: string) {
 		return this.projectService.remove(user, id);
 	}
 }

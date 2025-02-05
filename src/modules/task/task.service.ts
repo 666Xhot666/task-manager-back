@@ -7,6 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
 
+import { CacheService } from '../../core/services/cache.service';
 import { Project } from '../project/entities/project.entity';
 import { User, UserRole } from '../user/entities/user.entity';
 
@@ -19,6 +20,8 @@ import { Task, TaskStatus } from './entities/task.entity';
 @Injectable()
 export class TaskService {
 	private readonly logger = new Logger(TaskService.name);
+	private readonly CACHE_TTL = 60;
+	private readonly CACHE_PREFIX = 'tasks';
 
 	constructor(
 		@InjectRepository(Task)
@@ -28,6 +31,7 @@ export class TaskService {
 		@InjectRepository(Project)
 		private readonly projectRepository: Repository<Project>,
 		private readonly auditLogTaskService: AuditLogTaskService,
+		private readonly cacheService: CacheService,
 	) {}
 	/**
 	 * Creates a new task after validating user access and assignee existence.
@@ -64,17 +68,28 @@ export class TaskService {
 	 * @returns A list of tasks matching the filters.
 	 */
 	async findAll(user: User, filters: TaskFilterDto): Promise<Task[]> {
-		const query = this.buildBaseQuery(user);
-
-		this.applyFilters(query, filters, user.role);
-		this.applySorting(query, filters.sortBy, filters.order);
-
-		this.logger.debug(
-			'Generated SQL query for finding all tasks: ',
-			query.getQuery(),
+		const cacheKey = this.cacheService.generateKey(
+			this.CACHE_PREFIX,
+			user.id,
+			JSON.stringify(filters),
 		);
+		return this.cacheService.getOrSet(
+			cacheKey,
+			async () => {
+				const query = this.buildBaseQuery(user);
 
-		return query.getMany();
+				this.applyFilters(query, filters, user.role);
+				this.applySorting(query, filters.sortBy, filters.order);
+
+				this.logger.debug(
+					'Generated SQL query for finding all tasks: ',
+					query.getQuery(),
+				);
+
+				return query.getMany();
+			},
+			this.CACHE_TTL,
+		);
 	}
 
 	/**
@@ -86,15 +101,26 @@ export class TaskService {
 	 * @returns The task if found, or null if not found.
 	 */
 	async findOne(user: User, id: number) {
-		const query = this.buildBaseQuery(user);
-		query.andWhere('task.id = :id', { id });
-
-		this.logger.debug(
-			'Generated SQL query for finding task by ID: ',
-			query.getQuery(),
+		const cacheKey = this.cacheService.generateKey(
+			this.CACHE_PREFIX,
+			id.toString(),
+			user.id.toString(),
 		);
+		return this.cacheService.getOrSet(
+			cacheKey,
+			async () => {
+				const query = this.buildBaseQuery(user);
+				query.andWhere('task.id = :id', { id });
 
-		return query.getOne();
+				this.logger.debug(
+					'Generated SQL query for finding task by ID: ',
+					query.getQuery(),
+				);
+
+				return query.getOne();
+			},
+			this.CACHE_TTL,
+		);
 	}
 
 	/**
@@ -123,6 +149,7 @@ export class TaskService {
 		this.updateTaskProperties(user, task, updateTaskDto);
 		const updatedTask = await this.taskRepository.save(task);
 		await this.auditLogTaskService.logUpdate(user, task, updatedTask);
+		await this.invalidateCacheKey(id, user);
 		this.logger.log(
 			`Task ${updatedTask.id} updated successfully: ${JSON.stringify(updatedTask, null, 2)}`,
 		);
@@ -155,9 +182,18 @@ export class TaskService {
 		}
 		const removedTask = await this.taskRepository.remove(task);
 		await this.auditLogTaskService.logDelete(user, task);
-
+		await this.invalidateCacheKey(id, user);
 		this.logger.log(`Task ${removedTask.id} deleted successfully.`);
 		return removedTask;
+	}
+
+	private async invalidateCacheKey(id: number, user: User) {
+		const cacheKey = this.cacheService.generateKey(
+			this.CACHE_PREFIX,
+			id.toString(),
+			user.id.toString(),
+		);
+		await this.cacheService.delete(cacheKey);
 	}
 	/**
 	 * Checks if the user has access based on their role.

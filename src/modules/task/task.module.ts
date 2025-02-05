@@ -10,10 +10,11 @@ import { AuditLogTaskService } from './audit-log.task.service';
 import { Task } from './entities/task.entity';
 import { TaskController } from './task.controller';
 import { TaskService } from './task.service';
+import { CacheService } from '../../core/services/cache.service';
 
 @Module({
 	imports: [TypeOrmModule.forFeature([Task, User, Project, AuditLog])],
 	controllers: [TaskController],
-	providers: [TaskService, AuditService, AuditLogTaskService],
+	providers: [TaskService, AuditService, AuditLogTaskService, CacheService],
 })
 export class TaskModule {}

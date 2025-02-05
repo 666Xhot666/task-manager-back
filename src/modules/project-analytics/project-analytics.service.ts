@@ -5,10 +5,10 @@ import {
 	StreamableFile,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Response } from 'express';
 import * as fastCsv from 'fast-csv';
 import { Repository } from 'typeorm';
 
+import { CacheService } from '../../core/services/cache.service';
 import { Project } from '../project/entities/project.entity';
 import { Task } from '../task/entities/task.entity';
 import { User, UserRole } from '../user/entities/user.entity';
@@ -20,6 +20,8 @@ import { CsvTask } from './types/csv.type';
 
 @Injectable()
 export class ProjectAnalyticsService {
+	private readonly CACHE_TTL = 60 * 60 * 24;
+	private readonly CACHE_PREFIX = 'project-analytics';
 	private readonly logger = new Logger(ProjectAnalyticsService.name);
 
 	constructor(
@@ -29,6 +31,7 @@ export class ProjectAnalyticsService {
 		private readonly userRepository: Repository<User>,
 		@InjectRepository(Project)
 		private readonly projectRepository: Repository<Project>,
+		private readonly cacheService: CacheService,
 	) {}
 
 	/**
@@ -39,34 +42,40 @@ export class ProjectAnalyticsService {
 	 */
 	async getTaskStatusStats(
 		user: User,
-		projectId: number,
+		projectId: string,
 	): Promise<TaskStatusStatsDto> {
-		await this.validateProjectExistence(user, projectId);
+		return this.cacheService.getOrSet(
+			this.generateCacheKey('getTaskStatusStats', projectId, user),
+			async () => {
+				await this.validateProjectExistence(user, projectId);
 
-		const query = this.taskRepository
-			.createQueryBuilder('task')
-			.select('task.status', 'status')
-			.addSelect('COUNT(task.id)', 'count')
-			.where('task.projectId = :projectId', { projectId })
-			.groupBy('task.status');
+				const query = this.taskRepository
+					.createQueryBuilder('task')
+					.select('task.status', 'status')
+					.addSelect('COUNT(task.id)', 'count')
+					.where('task.projectId = :projectId', { projectId })
+					.groupBy('task.status');
 
-		this.logger.debug(
-			`Generated Query for getTaskStatusStats: projectId:${projectId} ::  query: ${query.getQuery()}`,
+				this.logger.debug(
+					`Generated Query for getTaskStatusStats: projectId:${projectId} ::  query: ${query.getQuery()}`,
+				);
+				const result = await query.getRawMany<Record<string, string>>();
+
+				return {
+					stats: result.reduce(
+						(
+							acc: Record<string, number>,
+							{ status, count },
+						): Record<string, number> => {
+							acc[status] = parseInt(count);
+							return acc;
+						},
+						{},
+					),
+				};
+			},
+			this.CACHE_TTL,
 		);
-		const result = await query.getRawMany<Record<string, string>>();
-
-		return {
-			stats: result.reduce(
-				(
-					acc: Record<string, number>,
-					{ status, count },
-				): Record<string, number> => {
-					acc[status] = parseInt(count);
-					return acc;
-				},
-				{},
-			),
-		};
 	}
 
 	/**
@@ -77,28 +86,34 @@ export class ProjectAnalyticsService {
 	 */
 	async getAverageCompletionTime(
 		user: User,
-		projectId: number,
+		projectId: string,
 	): Promise<AverageCompletionTimeDto> {
-		await this.validateProjectExistence(user, projectId);
+		return this.cacheService.getOrSet(
+			this.generateCacheKey('getAverageCompletionTime', projectId, user),
+			async () => {
+				await this.validateProjectExistence(user, projectId);
 
-		const query = this.taskRepository
-			.createQueryBuilder('task')
-			.select(
-				'AVG(EXTRACT(EPOCH FROM (task.completedAt - task.createdAt)))',
-				'avgTime',
-			)
-			.where('task.projectId = :projectId', { projectId })
-			.andWhere('task.status = :status', { status: 'Done' });
+				const query = this.taskRepository
+					.createQueryBuilder('task')
+					.select(
+						'AVG(EXTRACT(EPOCH FROM (task.completedAt - task.createdAt)))',
+						'avgTime',
+					)
+					.where('task.projectId = :projectId', { projectId })
+					.andWhere('task.status = :status', { status: 'Done' });
 
-		this.logger.debug(
-			`Generated Query for getAverageCompletionTime: projectId:${projectId} ::  query: ${query.getQuery()}`,
+				this.logger.debug(
+					`Generated Query for getAverageCompletionTime: projectId:${projectId} ::  query: ${query.getQuery()}`,
+				);
+				const result = await query.getRawOne<{ avgTime: string }>();
+
+				const seconds = parseFloat(result?.avgTime || '0');
+				return {
+					averageTime: this.formatDuration(seconds),
+				};
+			},
+			this.CACHE_TTL,
 		);
-		const result = await query.getRawOne<{ avgTime: string }>();
-
-		const seconds = parseFloat(result?.avgTime || '0');
-		return {
-			averageTime: this.formatDuration(seconds),
-		};
 	}
 
 	/**
@@ -109,35 +124,40 @@ export class ProjectAnalyticsService {
 	 */
 	async getTopActiveUsers(
 		user: User,
-		projectId: number,
+		projectId: string,
 	): Promise<TopUserDto[]> {
-		await this.validateProjectExistence(user, projectId);
+		return this.cacheService.getOrSet(
+			this.generateCacheKey('getAverageCompletionTime', projectId, user),
+			async () => {
+				await this.validateProjectExistence(user, projectId);
 
-		const query = this.userRepository
-			.createQueryBuilder('user')
-			.select(['user.email', 'COUNT(task.id) as completedTasks'])
-			.innerJoin('user.tasks', 'task', 'task.projectId = :projectId', {
-				projectId,
-			})
-			.where('task.status = :status', { status: 'Done' })
-			.groupBy('user.id')
-			.orderBy('completedTasks', 'DESC')
-			.limit(3);
+				const query = this.userRepository
+					.createQueryBuilder('user')
+					.select(['user.email', 'COUNT(task.id) as completedTasks'])
+					.innerJoin('user.tasks', 'task', 'task.projectId = :projectId', {
+						projectId,
+					})
+					.where('task.status = :status', { status: 'Done' })
+					.groupBy('user.id')
+					.orderBy('completedTasks', 'DESC')
+					.limit(3);
 
-		this.logger.debug(
-			`Generated Query for getTopActiveUsers: projectId:${projectId} ::  query: ${query.getQuery()}`,
+				this.logger.debug(
+					`Generated Query for getTopActiveUsers: projectId:${projectId} ::  query: ${query.getQuery()}`,
+				);
+				return await query.getRawMany();
+			},
+			this.CACHE_TTL,
 		);
-		return await query.getRawMany();
 	}
 
 	/**
 	 * Generates a CSV file of tasks and streams it to the client.
-	 * @param res The response object to stream the file.
 	 * @param user The user requesting the file.
 	 * @param projectId The project ID to fetch data for.
 	 * @returns A StreamableFile containing the CSV data.
 	 */
-	async getCSV(user: User, projectId: number) {
+	async getCSV(user: User, projectId: string) {
 		await this.validateProjectExistence(user, projectId);
 
 		const query = this.taskRepository
@@ -172,7 +192,7 @@ export class ProjectAnalyticsService {
 	 */
 	private async validateProjectExistence(
 		user: User,
-		projectId: number,
+		projectId: string,
 	): Promise<boolean> {
 		const query = this.projectRepository.createQueryBuilder('project');
 		query.where('project.id = :projectId', { projectId });
@@ -203,5 +223,18 @@ export class ProjectAnalyticsService {
 		const hours = Math.floor((seconds % 86400) / 3600);
 		const minutes = Math.floor((seconds % 3600) / 60);
 		return `${days}d ${hours}h ${minutes}m`;
+	}
+
+	private generateCacheKey(
+		method: string,
+		projectId: string,
+		user: User,
+	): string {
+		return this.cacheService.generateKey(
+			this.CACHE_PREFIX,
+			method,
+			projectId,
+			user.id,
+		);
 	}
 }
