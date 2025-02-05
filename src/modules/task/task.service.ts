@@ -18,6 +18,7 @@ import { CreateTaskDto } from './dto/create-task.dto';
 import { TaskFilterDto } from './dto/filter-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { Task, TaskStatus } from './entities/task.entity';
+import { TaskGateway } from './task.gateway';
 
 @Injectable()
 export class TaskService {
@@ -35,6 +36,7 @@ export class TaskService {
 		private readonly auditLogTaskService: AuditLogTaskService,
 		private readonly cacheService: CacheService,
 		private readonly emailQueueProducer: EmailQueueProducer,
+		private readonly taskGateway: TaskGateway,
 	) {}
 	/**
 	 * Creates a new task after validating user access and assignee existence.
@@ -71,6 +73,8 @@ export class TaskService {
 			},
 			EmailJobPriority.HIGH,
 		);
+
+		this.taskGateway.notifyTaskCreated(savedTask, user.id);
 		this.logger.log(`Task created successfully with ID ${savedTask.id}`);
 		return savedTask;
 	}
@@ -166,6 +170,8 @@ export class TaskService {
 		const updatedTask = await this.taskRepository.save(task);
 		await this.auditLogTaskService.logUpdate(user, task, updatedTask);
 		await this.invalidateCacheKey(id, user);
+		this.taskGateway.notifyTaskUpdated(updatedTask, user.id);
+
 		this.logger.log(
 			`Task ${updatedTask.id} updated successfully: ${JSON.stringify(updatedTask, null, 2)}`,
 		);

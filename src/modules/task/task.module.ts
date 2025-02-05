@@ -13,6 +13,7 @@ import { User } from '../user/entities/user.entity';
 import { AuditLogTaskService } from './audit-log.task.service';
 import { Task } from './entities/task.entity';
 import { TaskController } from './task.controller';
+import { TaskGateway } from './task.gateway';
 import { TaskService } from './task.service';
 
 @Module({
@@ -27,6 +28,7 @@ import { TaskService } from './task.service';
 		AuditLogTaskService,
 		CacheService,
 		EmailQueueProducer,
+		TaskGateway,
 	],
 })
 export class TaskModule {}
