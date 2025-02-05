@@ -1,6 +1,14 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Exclude } from 'class-transformer';
-import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import {
+	Column,
+	CreateDateColumn,
+	DeleteDateColumn,
+	Entity,
+	OneToMany,
+	PrimaryGeneratedColumn,
+	UpdateDateColumn,
+} from 'typeorm';
 
 import { JwtId } from '../../auth/jwt-id/entities/jwt-id.entity';
 import { Project } from '../../project/entities/project.entity';
@@ -47,4 +55,25 @@ export class User {
 	@OneToMany(() => Task, (task) => task.assignee)
 	@Exclude()
 	tasks?: Task[];
+	@ApiProperty({
+		description: 'Creation timestamp',
+		example: '2025-02-05T10:12:30Z',
+	})
+	@CreateDateColumn({ type: 'timestamp' })
+	createdAt: Date;
+
+	@ApiProperty({
+		description: 'Last update timestamp',
+		example: '2025-02-05T10:12:30Z',
+	})
+	@UpdateDateColumn({ type: 'timestamp' })
+	updatedAt: Date;
+
+	@ApiProperty({
+		description: 'Deletion timestamp',
+		example: '2025-02-05T10:12:30Z',
+		nullable: true,
+	})
+	@DeleteDateColumn({ type: 'timestamp', nullable: true })
+	deletedAt?: Date;
 }

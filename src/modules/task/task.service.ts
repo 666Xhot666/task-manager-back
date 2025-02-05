@@ -1,6 +1,7 @@
 import {
 	ForbiddenException,
 	Injectable,
+	Logger,
 	NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -17,6 +18,8 @@ import { Task, TaskStatus } from './entities/task.entity';
 
 @Injectable()
 export class TaskService {
+	private readonly logger = new Logger(TaskService.name);
+
 	constructor(
 		@InjectRepository(Task)
 		private readonly taskRepository: Repository<Task>,
@@ -28,6 +31,7 @@ export class TaskService {
 	) {}
 	/**
 	 * Creates a new task after validating user access and assignee existence.
+	 * Logs detailed info before creating the task and generated query debug logs.
 	 *
 	 * @param user - The user creating the task.
 	 * @param createTaskDto - The data transfer object containing task creation details.
@@ -36,17 +40,24 @@ export class TaskService {
 	 * @throws NotFoundException if the project or assignee is not found.
 	 */
 	async create(user: User, createTaskDto: CreateTaskDto) {
+		this.logger.debug(`User ${user.id} is attempting to create a task.`);
 		this.checkForRoleAccess(user.role, [UserRole.PERFORMER]);
 
 		await this.validateProjectAccess(user, createTaskDto.projectId);
 		await this.ensureAssigneeExists(createTaskDto.assigneeId);
 
 		const task = this.taskRepository.create(createTaskDto);
+		this.logger.debug(`Created task entity: ${JSON.stringify(task)}`);
+
 		await this.auditLogTaskService.logCreate(user, task);
-		return this.taskRepository.save(task);
+		const savedTask = await this.taskRepository.save(task);
+		this.logger.log(`Task created successfully with ID ${savedTask.id}`);
+		return savedTask;
 	}
+
 	/**
 	 * Retrieves all tasks based on user role and filters.
+	 * Logs the generated SQL query before execution.
 	 *
 	 * @param user - The user requesting the tasks.
 	 * @param filters - The filters to apply on task search.
@@ -58,10 +69,17 @@ export class TaskService {
 		this.applyFilters(query, filters, user.role);
 		this.applySorting(query, filters.sortBy, filters.order);
 
+		this.logger.debug(
+			'Generated SQL query for finding all tasks: ',
+			query.getQuery(),
+		);
+
 		return query.getMany();
 	}
+
 	/**
 	 * Retrieves a specific task by its ID.
+	 * Logs the generated SQL query before execution.
 	 *
 	 * @param user - The user requesting the task.
 	 * @param id - The ID of the task to retrieve.
@@ -71,10 +89,17 @@ export class TaskService {
 		const query = this.buildBaseQuery(user);
 		query.andWhere('task.id = :id', { id });
 
+		this.logger.debug(
+			'Generated SQL query for finding task by ID: ',
+			query.getQuery(),
+		);
+
 		return query.getOne();
 	}
+
 	/**
 	 * Updates a specific task by its ID.
+	 * Logs the changes and generated SQL query before execution.
 	 *
 	 * @param user - The user requesting the update.
 	 * @param id - The ID of the task to update.
@@ -83,19 +108,30 @@ export class TaskService {
 	 * @throws NotFoundException if the task is not found.
 	 */
 	async update(user: User, id: number, updateTaskDto: UpdateTaskDto) {
+		this.logger.debug(
+			`User ${user.id} is attempting to update task with ID ${id}.`,
+		);
 		const query = this.buildBaseQuery(user);
 		query.andWhere('task.id = :id', { id });
 
 		const task = await query.getOne();
-		if (!task) throw new NotFoundException();
+		if (!task) {
+			this.logger.warn(`Task with ID ${id} not found.`);
+			throw new NotFoundException(`Task with ID ${id} not found.`);
+		}
 
 		this.updateTaskProperties(user, task, updateTaskDto);
 		const updatedTask = await this.taskRepository.save(task);
 		await this.auditLogTaskService.logUpdate(user, task, updatedTask);
+		this.logger.log(
+			`Task ${updatedTask.id} updated successfully: ${JSON.stringify(updatedTask, null, 2)}`,
+		);
 		return updatedTask;
 	}
+
 	/**
 	 * Deletes a specific task by its ID.
+	 * Logs the task deletion and generated SQL query before execution.
 	 *
 	 * @param user - The user requesting the deletion.
 	 * @param id - The ID of the task to delete.
@@ -104,15 +140,23 @@ export class TaskService {
 	 * @throws NotFoundException if the task is not found.
 	 */
 	async remove(user: User, id: number) {
+		this.logger.debug(
+			`User ${user.id} is attempting to delete task with ID ${id}.`,
+		);
 		this.checkForRoleAccess(user.role, [UserRole.PERFORMER]);
 
 		const query = this.buildBaseQuery(user);
 		query.andWhere('task.id = :id', { id });
 
 		const task = await query.getOne();
-		if (!task) throw new NotFoundException();
+		if (!task) {
+			this.logger.warn(`Task with ID ${id} not found.`);
+			throw new NotFoundException(`Task with ID ${id} not found.`);
+		}
 		const removedTask = await this.taskRepository.remove(task);
 		await this.auditLogTaskService.logDelete(user, task);
+
+		this.logger.log(`Task ${removedTask.id} deleted successfully.`);
 		return removedTask;
 	}
 	/**

@@ -122,10 +122,9 @@ export class ProjectAnalyticsController {
 	@Header('Content-Disposition', 'attachment; filename="tasks-analytics.csv"')
 	@Get('csv')
 	async exportcsv(
-		@Res({ passthrough: true }) res: Response,
 		@AuthorizedUser() user: User,
 		@Param('projectId') projectId: number,
 	) {
-		return this.projectAnalyticsService.getCSV(res, user, projectId);
+		return this.projectAnalyticsService.getCSV(user, projectId);
 	}
 }

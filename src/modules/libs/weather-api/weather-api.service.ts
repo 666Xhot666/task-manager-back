@@ -21,6 +21,8 @@ export class WeatherApiService {
 	}
 
 	async getWeather(location: string): Promise<WeatherData> {
+		this.logger.log(`Fetching weather data for location: ${location}`);
+
 		try {
 			const response = await firstValueFrom<AxiosResponse<WeatherData>>(
 				this.httpService.get(this.API_URL, {
@@ -32,10 +34,16 @@ export class WeatherApiService {
 				}),
 			);
 
+			this.logger.log(
+				`Successfully fetched weather data for location: ${location}`,
+			);
 			return response.data;
 		} catch (error) {
 			this.logger.error(
-				`Failed to fetch weather data: ${error instanceof Error ? error.message : 'Unknown error'}`,
+				`Failed to fetch weather data for location: ${location}. Error: ${
+					error instanceof Error ? error.message : 'Unknown error'
+				}`,
+				error instanceof Error ? error.stack : 'No stack trace available',
 			);
 			throw new Error('Failed to fetch weather data');
 		}

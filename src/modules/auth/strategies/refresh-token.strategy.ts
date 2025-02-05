@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
@@ -11,6 +11,8 @@ export class RefreshTokenStrategy extends PassportStrategy(
 	Strategy,
 	'jwt-refresh',
 ) {
+	private readonly logger = new Logger(RefreshTokenStrategy.name);
+
 	constructor(
 		private readonly configService: ConfigService,
 		private readonly jwtIdService: JwtIdService,
@@ -21,8 +23,24 @@ export class RefreshTokenStrategy extends PassportStrategy(
 			ignoreExpiration: false,
 		});
 	}
+
 	async validate(payload: JwtPayloadSecret) {
-		const user = await this.jwtIdService.verify(payload.userId, payload.jti);
-		return { user, jti: payload.jti };
+		this.logger.log(
+			`Validating refresh token for user ${payload.userId} with jti ${payload.jti}`,
+		);
+
+		try {
+			const user = await this.jwtIdService.verify(payload.userId, payload.jti);
+			this.logger.log(
+				`Token validated successfully for user ${payload.userId}`,
+			);
+			return { user, jti: payload.jti };
+		} catch (error) {
+			this.logger.error(
+				`Failed to validate refresh token for user ${payload.userId} with jti ${payload.jti}`,
+				error instanceof Error ? error.stack : 'Validation Failed',
+			);
+			throw error;
+		}
 	}
 }

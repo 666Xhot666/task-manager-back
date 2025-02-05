@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 
@@ -15,6 +15,8 @@ export class JwtWrapperService {
 	private readonly REFRESH_SECRET: string;
 	private readonly ACCESS_EXPIRES_IN: DurationStringValue;
 	private readonly REFRESH_EXPIRES_IN: DurationStringValue;
+	private readonly logger = new Logger(JwtWrapperService.name);
+
 	constructor(
 		private readonly jwtService: JwtService,
 		private readonly configService: ConfigService,
@@ -32,24 +34,33 @@ export class JwtWrapperService {
 	}
 
 	async generateTokens(payload: JwtPayload) {
+		this.logger.log(`Generating tokens for user ${payload.userId}`);
 		const secret = await this.jwtIdService.create(
 			payload.userId,
 			this.REFRESH_EXPIRES_IN,
 		);
+		this.logger.log(
+			`Created JWT ID for user ${payload.userId} with secret ${secret}`,
+		);
+
 		const tokenPayload: JwtPayloadSecret = {
 			...payload,
 			jti: secret,
 		};
 
-		return Object.fromEntries(
+		const tokens = Object.fromEntries(
 			await Promise.all([
 				['accessToken', await this.createToken(tokenPayload, 'access')],
 				['refreshToken', await this.createToken(tokenPayload, 'refresh')],
 			]),
 		) as { accessToken: string; refreshToken: string };
+
+		this.logger.log(`Tokens generated for user ${payload.userId}`);
+		return tokens;
 	}
 
 	private createToken(payload: JwtPayloadSecret, type: 'access' | 'refresh') {
+		this.logger.log(`Creating ${type} token for user ${payload.userId}`);
 		return this.jwtService.signAsync(payload, {
 			expiresIn:
 				type === 'access' ? this.ACCESS_EXPIRES_IN : this.REFRESH_EXPIRES_IN,
@@ -58,9 +69,12 @@ export class JwtWrapperService {
 	}
 
 	async refreshAccessToken(payload: JwtPayloadSecret) {
-		return this.jwtService.signAsync(payload, {
+		this.logger.log(`Refreshing access token for user ${payload.userId}`);
+		const refreshedToken = await this.jwtService.signAsync(payload, {
 			expiresIn: this.ACCESS_EXPIRES_IN,
 			secret: this.ACCESS_SECRET,
 		});
+		this.logger.log(`Access token refreshed for user ${payload.userId}`);
+		return refreshedToken;
 	}
 }

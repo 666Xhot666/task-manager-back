@@ -1,4 +1,4 @@
-import { ConsoleLogger, Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -8,7 +8,7 @@ import { ActionTypes, AuditLog, EntityType } from './entities/audit.entity';
 
 @Injectable()
 export class AuditService {
-	private readonly logger = new ConsoleLogger(AuditService.name);
+	private readonly logger = new Logger(AuditService.name);
 
 	constructor(
 		@InjectRepository(AuditLog)
@@ -24,6 +24,10 @@ export class AuditService {
 		oldValue?: Record<string, any>,
 		newValue?: Record<string, any>,
 	): Promise<void> {
+		this.logger.log(
+			`Attempting to log an audit event for entity: ${entityType}, entityId: ${entityId}, action: ${action}`,
+		);
+
 		try {
 			const logEntry = this.auditLogRepository.create({
 				action,
@@ -35,9 +39,14 @@ export class AuditService {
 			});
 
 			await this.auditLogRepository.save(logEntry);
+
+			this.logger.log(
+				`Successfully logged audit event for entity: ${entityType}, entityId: ${entityId}, action: ${action}`,
+			);
 		} catch (error) {
 			this.logger.error(
-				`Failed to log audit event: ${error instanceof Error ? error.message : 'Ooops'}`,
+				`Failed to log audit event for entity: ${entityType}, entityId: ${entityId}, action: ${action}`,
+				error instanceof Error ? error.message : 'Ooops',
 				error instanceof Error ? error.stack : 'Ooops',
 			);
 		}

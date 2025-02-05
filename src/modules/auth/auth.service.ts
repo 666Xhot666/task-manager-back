@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -12,12 +12,15 @@ import { JwtWrapperService } from './jwt-wrapper/jwt-wrapper.service';
 
 @Injectable()
 export class AuthService {
+	private readonly logger = new Logger(AuthService.name);
+
 	constructor(
 		@InjectRepository(User)
 		private userRepository: Repository<User>,
 		private readonly jwtWrapperService: JwtWrapperService,
 		private readonly jwtIdService: JwtIdService,
 	) {}
+
 	/**
 	 * Logs the user in by validating credentials and returning JWT tokens.
 	 *
@@ -26,14 +29,32 @@ export class AuthService {
 	 * @throws UnauthorizedException - If the credentials are invalid.
 	 */
 	async login({ email, password }: LoginDto) {
+		this.logger.log(`Attempting to log in with email: ${email}`);
+
 		const user = await this.userRepository.findOneBy({ email });
-		if (!user || !(await encrypt.verify(password, user.password))) {
+		if (!user) {
+			this.logger.warn(`Login failed: No user found with email: ${email}`);
 			throw new UnauthorizedException('Invalid credentials.');
 		}
-		return this.jwtWrapperService.generateTokens({
+
+		const isPasswordValid = await encrypt.verify(password, user.password);
+		if (!isPasswordValid) {
+			this.logger.warn(`Login failed: Invalid password for email: ${email}`);
+			throw new UnauthorizedException('Invalid credentials.');
+		}
+
+		this.logger.log(`Login successful for email: ${email}`);
+
+		const tokens = await this.jwtWrapperService.generateTokens({
 			userId: user.id,
 		});
+		this.logger.log(
+			`Generated JWT tokens for user: ${email} === ${JSON.stringify(tokens, null, 2)}`,
+		);
+
+		return tokens;
 	}
+
 	/**
 	 * Logs out the user by deleting the JWT ID from the database.
 	 *
@@ -41,9 +62,14 @@ export class AuthService {
 	 * @returns true if logout was successful.
 	 */
 	async logout(jti: string): Promise<boolean> {
+		this.logger.log(`Attempting to log out with JWT ID: ${jti}`);
+
 		await this.jwtIdService.delete(jti);
+		this.logger.log(`JWT ID ${jti} deleted. User logged out successfully.`);
+
 		return true;
 	}
+
 	/**
 	 * Refreshes the access token for the authenticated user.
 	 *
@@ -51,8 +77,14 @@ export class AuthService {
 	 * @returns New access token.
 	 */
 	async refreshAccessToken(payload: JwtPayloadSecret) {
+		this.logger.log(`Refreshing access token for userId: ${payload.userId}`);
+
 		const accessToken =
 			await this.jwtWrapperService.refreshAccessToken(payload);
+		this.logger.log(
+			`Access token refreshed for userId: ${payload.userId} === ${accessToken}`,
+		);
+
 		return { accessToken };
 	}
 }
